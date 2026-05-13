@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HubConnect — Admin</title>
+  <style>
+    :root {
+      --green:      #06C755;
+      --green-dk:   #059444;
+      --blue:       #1a73e8;
+      --red:        #d93025;
+      --bg:         #f4f6f9;
+      --card:       #ffffff;
+      --text:       #1f1f1f;
+      --sub:        #666;
+      --border:     #e0e0e0;
+      --r:          12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Sarabun', Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Topbar ── */
+    .topbar {
+      background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%);
+      color: white; padding: 16px 24px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .topbar-icon { font-size: 26px; }
+    .topbar h1  { font-size: 20px; font-weight: 700; }
+    .topbar p   { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+
+    /* ── Layout ── */
+    .main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    /* ── Search card ── */
+    .search-card {
+      background: var(--card); border-radius: var(--r);
+      padding: 20px 24px; margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .search-card h2 { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--sub); letter-spacing: 0.4px; }
+    .search-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    .field-group label { font-size: 12px; font-weight: 700; color: var(--sub); }
+    .field-group input,
+    .field-group select {
+      padding: 9px 12px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: 14px; font-family: inherit;
+      outline: none; transition: border 0.2s; background: white; color: var(--text);
+    }
+    .field-group input:focus,
+    .field-group select:focus { border-color: var(--green); }
+
+    .search-actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+    .btn-search {
+      padding: 10px 24px; background: var(--green); color: white;
+      border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+      cursor: pointer; font-family: inherit; transition: background 0.2s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-search:hover { background: var(--green-dk); }
+    .btn-search:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-clear {
+      padding: 10px 16px; background: white; color: var(--sub);
+      border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 14px; cursor: pointer; font-family: inherit;
+    }
+    .btn-clear:hover { border-color: #aaa; color: var(--text); }
+    .result-count { font-size: 13px; color: var(--sub); margin-left: auto; }
+
+    /* ── Loading / Empty ── */
+    .state-box {
+      text-align: center; padding: 60px 20px; color: var(--sub);
+    }
+    .state-box .icon { font-size: 48px; margin-bottom: 12px; }
+    .state-box p { font-size: 15px; }
+    .spinner-sm {
+      display: inline-block; width: 22px; height: 22px;
+      border: 3px solid #ccc; border-top-color: var(--green);
+      border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Session card ── */
+    .session-card {
+      background: var(--card); border-radius: var(--r);
+      margin-bottom: 16px; overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .session-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      flex-wrap: wrap; gap: 10px;
+    }
+    .badge {
+      padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700;
+    }
+    .badge-wave   { background: #e8f4fd; color: #1565c0; }
+    .badge-branch { background: #f0fff5; color: #2e7d32; }
+    .badge-up     { background: #fff3e0; color: #e65100; }
+    .badge-down   { background: #fce4ec; color: #c62828; }
+    .session-meta { font-size: 13px; color: var(--sub); margin-left: auto; white-space: nowrap; }
+    .session-meta span { margin-left: 12px; }
+
+    .session-body { padding: 16px 20px; }
+
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .photo-item {
+      position: relative; aspect-ratio: 1;
+      border-radius: 8px; overflow: hidden;
+      background: #eee; cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .photo-item:hover { transform: scale(1.03); box-shadow: 0 4px 16px rgba(0,0,0,0.18); }
+    .photo-item img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .photo-item .photo-name {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.55); color: white;
+      font-size: 10px; padding: 4px 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .photo-item .photo-err {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; color: #bbb; background: #f5f5f5;
+    }
+    .no-photos { font-size: 13px; color: var(--sub); padding: 8px 0; }
+
+    .session-footer {
+      padding: 10px 20px; background: #fafafa;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .btn-drive {
+      font-size: 13px; color: var(--blue); text-decoration: none;
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border: 1px solid var(--border);
+      border-radius: 6px; background: white;
+      transition: background 0.15s;
+    }
+    .btn-drive:hover { background: #f0f4ff; }
+    .photo-count-label { font-size: 12px; color: var(--sub); margin-left: auto; }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.92); z-index: 1000;
+      align-items: center; justify-content: center;
+      flex-direction: column;
+    }
+    .lightbox.open { display: flex; }
+    .lightbox img {
+      max-width: 92vw; max-height: 82vh;
+      border-radius: 6px; object-fit: contain;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    }
+    .lightbox-close {
+      position: absolute; top: 16px; right: 20px;
+      color: white; font-size: 32px; cursor: pointer; line-height: 1;
+    }
+    .lightbox-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      color: white; font-size: 36px; cursor: pointer;
+      padding: 12px; background: rgba(255,255,255,0.1);
+      border-radius: 50%; line-height: 1; user-select: none;
+      transition: background 0.2s;
+    }
+    .lightbox-nav:hover { background: rgba(255,255,255,0.25); }
+    .lightbox-prev { left: 12px; }
+    .lightbox-next { right: 12px; }
+    .lightbox-caption {
+      color: rgba(255,255,255,0.8); font-size: 13px;
+      margin-top: 12px; text-align: center; max-width: 80vw;
+    }
+    .lightbox-counter { color: rgba(255,255,255,0.5); font-size: 12px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-icon">📦</div>
+  <div>
+    <h1>HubConnect — Admin</h1>
+    <p>ค้นหาและดูรูปขึ้น/ลงสินค้า</p>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Search form -->
+  <div class="search-card">
+    <h2>🔍 ค้นหา</h2>
+    <div class="search-grid">
+      <div class="field-group">
+        <label>เลข Wave</label>
+        <input type="text" id="qWave" placeholder="ทั้งหมด">
+      </div>
+      <div class="field-group">
+        <label>สาขา</label>
+        <select id="qBranch">
+          <option value="">ทั้งหมด</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>วันที่เริ่มต้น</label>
+        <input type="date" id="qDateFrom">
+      </div>
+      <div class="field-group">
+        <label>วันที่สิ้นสุด</label>
+        <input type="date" id="qDateTo">
+      </div>
+      <div class="field-group">
+        <label>ประเภท</label>
+        <select id="qType">
+          <option value="all">ทั้งหมด</option>
+          <option value="ขึ้นสินค้า">ขึ้นสินค้า</option>
+          <option value="ลงสินค้า">ลงสินค้า</option>
+        </select>
+      </div>
+    </div>
+    <div class="search-actions">
+      <button class="btn-search" id="btnSearch" onclick="doSearch()">
+        <span id="searchIcon">🔍</span> ค้นหา
+      </button>
+      <button class="btn-clear" onclick="clearForm()">ล้างค่า</button>
+      <span class="result-count" id="resultCount"></span>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="state-box">
+      <div class="icon">📂</div>
+      <p>กดค้นหาเพื่อดูรูปภาพ</p>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <span class="lightbox-close" onclick="closeLightboxForce()">✕</span>
+  <span class="lightbox-nav lightbox-prev" onclick="navPhoto(-1); event.stopPropagation()">‹</span>
+  <img id="lbImg" src="" alt="">
+  <span class="lightbox-nav lightbox-next" onclick="navPhoto(1); event.stopPropagation()">›</span>
+  <div class="lightbox-caption" id="lbCaption"></div>
+  <div class="lightbox-counter" id="lbCounter"></div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────
+var allPhotos  = [];   // flat array of all file objects across results
+var lbIndex    = 0;    // current lightbox index
+
+// ─── Init ────────────────────────────────────────────────────
+(function init() {
+  // Default date range: last 7 days
+  var today = new Date();
+  var from  = new Date(today); from.setDate(today.getDate() - 7);
+  document.getElementById('qDateTo').value   = fmt(today);
+  document.getElementById('qDateFrom').value = fmt(from);
+
+  // Load branch dropdown
+  google.script.run
+    .withSuccessHandler(function(branches) {
+      var sel = document.getElementById('qBranch');
+      branches.forEach(function(b) {
+        var opt = document.createElement('option');
+        opt.value = b; opt.textContent = b;
+        sel.appendChild(opt);
+      });
+    })
+    .adminGetBranches();
+
+  doSearch();
+})();
+
+function fmt(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+// ─── Search ──────────────────────────────────────────────────
+function doSearch() {
+  var btn  = document.getElementById('btnSearch');
+  var icon = document.getElementById('searchIcon');
+  btn.disabled = true;
+  icon.innerHTML = '<span class="spinner-sm"></span>';
+  document.getElementById('results').innerHTML =
+    '<div class="state-box"><div class="icon"><span class="spinner-sm"></span></div><p style="margin-top:12px">กำลังค้นหา...</p></div>';
+  document.getElementById('resultCount').textContent = '';
+
+  var params = {
+    wave:     document.getElementById('qWave').value.trim(),
+    branch:   document.getElementById('qBranch').value,
+    dateFrom: document.getElementById('qDateFrom').value,
+    dateTo:   document.getElementById('qDateTo').value,
+    type:     document.getElementById('qType').value
+  };
+
+  google.script.run
+    .withSuccessHandler(function(sessions) {
+      btn.disabled = false;
+      icon.textContent = '🔍';
+      renderResults(sessions);
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      icon.textContent = '🔍';
+      document.getElementById('results').innerHTML =
+        '<div class="state-box"><div class="icon">❌</div><p>' + (err.message || 'เกิดข้อผิดพลาด') + '</p></div>';
+    })
+    .adminSearch(params);
+}
+
+function clearForm() {
+  document.getElementById('qWave').value   = '';
+  document.getElementById('qBranch').value = '';
+  document.getElementById('qType').value   = 'all';
+  var today = new Date();
+  var from  = new Date(today); from.setDate(today.getDate() - 7);
+  document.getElementById('qDateTo').value   = fmt(today);
+  document.getElementById('qDateFrom').value = fmt(from);
+}
+
+// ─── Render ──────────────────────────────────────────────────
+function renderResults(sessions) {
+  var wrap = document.getElementById('results');
+  document.getElementById('resultCount').textContent =
+    sessions.length ? 'พบ ' + sessions.length + ' session' : '';
+
+  if (!sessions.length) {
+    wrap.innerHTML = '<div class="state-box"><div class="icon">🔎</div><p>ไม่พบข้อมูลที่ตรงกัน</p></div>';
+    return;
+  }
+
+  // Build flat photo list for lightbox navigation
+  allPhotos = [];
+  sessions.forEach(function(s) {
+    s.files.forEach(function(f) {
+      allPhotos.push({ id: f.id, name: f.name, meta: s.wave + ' | ' + s.branch + ' | ' + s.displayDate });
+    });
+  });
+
+  var html = sessions.map(function(s, si) {
+    var typeBadge = s.type === 'ขึ้นสินค้า' ? 'badge-up' : 'badge-down';
+    var globalOffset = 0;
+    // Calculate offset for this session's photos in allPhotos
+    for (var x = 0; x < si; x++) globalOffset += sessions[x].files.length;
+
+    var photosHtml = '';
+    if (!s.files.length) {
+      photosHtml = '<p class="no-photos">ไม่มีรูปใน session นี้ (อาจถูกลบจาก Drive แล้ว)</p>';
+    } else {
+      photosHtml = '<div class="photo-grid">' +
+        s.files.map(function(f, fi) {
+          var thumb = 'https://drive.google.com/thumbnail?id=' + f.id + '&sz=w300';
+          var gi    = globalOffset + fi;
+          return '<div class="photo-item" onclick="openLightbox(' + gi + ')" title="' + f.name + '">' +
+                   '<img src="' + thumb + '" alt="' + f.name + '" ' +
+                        'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+                   '<div class="photo-err" style="display:none">🖼️</div>' +
+                   '<div class="photo-name">' + f.name + '</div>' +
+                 '</div>';
+        }).join('') +
+      '</div>';
+    }
+
+    return '<div class="session-card">' +
+      '<div class="session-header">' +
+        '<span class="badge badge-wave">Wave: ' + s.wave + '</span>' +
+        '<span class="badge badge-branch">' + s.branch + '</span>' +
+        '<span class="badge badge-' + (s.type === 'ขึ้นสินค้า' ? 'up' : 'down') + '">' + s.type + '</span>' +
+        '<span class="badge" style="background:#f5f5f5;color:#555">📅 ' + s.displayDate + '</span>' +
+        '<div class="session-meta">' +
+          '<span>🕐 ' + s.uploadedAt + '</span>' +
+          '<span>🖼️ ' + s.photoCount + ' รูป</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="session-body">' + photosHtml + '</div>' +
+      '<div class="session-footer">' +
+        '<a class="btn-drive" href="' + s.folderUrl + '" target="_blank">📂 เปิดใน Drive</a>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  wrap.innerHTML = html;
+}
+
+// ─── Lightbox ────────────────────────────────────────────────
+function openLightbox(index) {
+  lbIndex = index;
+  showLbPhoto();
+  document.getElementById('lightbox').classList.add('open');
+  document.addEventListener('keydown', onLbKey);
+}
+
+function showLbPhoto() {
+  var p = allPhotos[lbIndex];
+  if (!p) return;
+  var fullUrl = 'https://drive.google.com/uc?export=view&id=' + p.id;
+  document.getElementById('lbImg').src          = fullUrl;
+  document.getElementById('lbCaption').textContent = p.name + ' | ' + p.meta;
+  document.getElementById('lbCounter').textContent =
+    (lbIndex + 1) + ' / ' + allPhotos.length;
+}
+
+function navPhoto(dir) {
+  lbIndex = (lbIndex + dir + allPhotos.length) % allPhotos.length;
+  showLbPhoto();
+}
+
+function closeLightbox(e) {
+  if (e.target === document.getElementById('lightbox')) closeLightboxForce();
+}
+function closeLightboxForce() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lbImg').src = '';
+  document.removeEventListener('keydown', onLbKey);
+}
+function onLbKey(e) {
+  if (e.key === 'ArrowRight') navPhoto(1);
+  if (e.key === 'ArrowLeft')  navPhoto(-1);
+  if (e.key === 'Escape')     closeLightboxForce();
+}
+</script>
+</body>
+</html>
