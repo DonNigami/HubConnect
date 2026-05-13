@@ -311,7 +311,21 @@ var selectedWave   = '';
 var selectedBranch = '';
 var allWaves       = [];
 var allBranches    = [];
+var allPairs       = [];
 var photos         = [];
+
+function getFilteredWaves() {
+  if (!selectedBranch) return allWaves;
+  var set = {};
+  allPairs.forEach(function(p) { if (p.branch === selectedBranch) set[p.wave] = true; });
+  return Object.keys(set).sort();
+}
+function getFilteredBranches() {
+  if (!selectedWave) return allBranches;
+  var set = {};
+  allPairs.forEach(function(p) { if (p.wave === selectedWave) set[p.branch] = true; });
+  return Object.keys(set).sort();
+}
 
 // ── Init LIFF ────────────────────────────────────────────────
 async function init() {
@@ -359,6 +373,7 @@ function loadHubData() {
       if (!r.ok) throw new Error(r.error || 'โหลดข้อมูลไม่สำเร็จ');
       allWaves    = r.data.waves    || [];
       allBranches = r.data.branches || [];
+      allPairs    = r.data.pairs    || [];
       var wInp = document.getElementById('waveInput');
       wInp.removeAttribute('readonly');
       wInp.placeholder = 'พิมพ์เพื่อค้นหาเลข Wave...';
@@ -441,14 +456,20 @@ document.addEventListener('click', function(e) {
 
 initSearchField({
   inputId: 'waveInput', listId: 'waveList', clearId: 'waveClear',
-  getAll: function() { return allWaves; },
-  setSelected: function(v) { selectedWave = v; },
+  getAll: function() { return getFilteredWaves(); },
+  setSelected: function(v) {
+    selectedWave = v;
+    if (selectedBranch && getFilteredBranches().indexOf(selectedBranch) === -1) clearBranch();
+  },
   emptyMsg: 'ไม่พบเลข Wave ในระบบ'
 });
 initSearchField({
   inputId: 'branchInput', listId: 'branchList', clearId: 'branchClear',
-  getAll: function() { return allBranches; },
-  setSelected: function(v) { selectedBranch = v; },
+  getAll: function() { return getFilteredBranches(); },
+  setSelected: function(v) {
+    selectedBranch = v;
+    if (selectedWave && getFilteredWaves().indexOf(selectedWave) === -1) clearWave();
+  },
   emptyMsg: 'ไม่พบชื่อสาขาในระบบ'
 });
 

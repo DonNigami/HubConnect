@@ -182,17 +182,20 @@ function getHubData() {
   var data      = sheet.getDataRange().getValues();
   var waveSet   = {};
   var branchSet = {};
+  var pairs     = [];
 
   for (var i = 1; i < data.length; i++) {
     var wave   = String(data[i][4] || '').trim();  // column E
     var branch = String(data[i][6] || '').trim();  // column G
     if (wave)   waveSet[wave]     = true;
     if (branch) branchSet[branch] = true;
+    if (wave && branch) pairs.push({ wave: wave, branch: branch });
   }
 
   return {
     waves:    Object.keys(waveSet).sort(),
-    branches: Object.keys(branchSet).sort()
+    branches: Object.keys(branchSet).sort(),
+    pairs:    pairs
   };
 }
 

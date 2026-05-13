@@ -351,7 +351,21 @@ var selectedWave   = '';
 var selectedBranch = '';
 var allWaves       = [];
 var allBranches    = [];
+var allPairs       = [];
 var photos         = [];
+
+function getFilteredWaves() {
+  if (!selectedBranch) return allWaves;
+  var set = {};
+  allPairs.forEach(function(p) { if (p.branch === selectedBranch) set[p.wave] = true; });
+  return Object.keys(set).sort();
+}
+function getFilteredBranches() {
+  if (!selectedWave) return allBranches;
+  var set = {};
+  allPairs.forEach(function(p) { if (p.wave === selectedWave) set[p.branch] = true; });
+  return Object.keys(set).sort();
+}
 
 // ============================================================
 //  Init LIFF
@@ -401,6 +415,7 @@ function loadHubData() {
     .withSuccessHandler(function(data) {
       allWaves    = data.waves    || [];
       allBranches = data.branches || [];
+      allPairs    = data.pairs    || [];
 
       var wInp = document.getElementById('waveInput');
       wInp.removeAttribute('readonly');
@@ -484,8 +499,14 @@ initSearchField({
   inputId:     'waveInput',
   listId:      'waveList',
   clearId:     'waveClear',
-  getAll:      function() { return allWaves; },
-  setSelected: function(v) { selectedWave = v; },
+  getAll:      function() { return getFilteredWaves(); },
+  setSelected: function(v) {
+    selectedWave = v;
+    // ถ้า branch ที่เลือกไว้ไม่ได้อยู่ใน wave นี้ → clear
+    if (selectedBranch && getFilteredBranches().indexOf(selectedBranch) === -1) {
+      clearBranch();
+    }
+  },
   emptyMsg:    'ไม่พบเลข Wave ในระบบ'
 });
 
@@ -494,8 +515,14 @@ initSearchField({
   inputId:     'branchInput',
   listId:      'branchList',
   clearId:     'branchClear',
-  getAll:      function() { return allBranches; },
-  setSelected: function(v) { selectedBranch = v; },
+  getAll:      function() { return getFilteredBranches(); },
+  setSelected: function(v) {
+    selectedBranch = v;
+    // ถ้า wave ที่เลือกไว้ไม่ได้อยู่ใน branch นี้ → clear
+    if (selectedWave && getFilteredWaves().indexOf(selectedWave) === -1) {
+      clearWave();
+    }
+  },
   emptyMsg:    'ไม่พบชื่อสาขาในระบบ'
 });
 
