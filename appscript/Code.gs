@@ -1,14 +1,16 @@
 // =============================================================
-//  CONFIG — ใส่ค่าจริงก่อน deploy
+//  CONFIG — อ่านค่าจาก Script Properties (Project Settings → Script Properties)
+//  ไม่มีค่าจริงใน code — ตั้งค่าใน Apps Script editor แทน
 // =============================================================
+var _props = PropertiesService.getScriptProperties();
 var CONFIG = {
-  SHEET_ID:           'YOUR_GOOGLE_SHEET_ID',          // ID ของ Google Sheets (Upload_Log)
-  ROOT_FOLDER_ID:     '1Hj_1fxOxcMcdQKGRTktaKWSpPOofY-x4',
-  LINE_CHANNEL_TOKEN: 'YOUR_LINE_CHANNEL_ACCESS_TOKEN',
-  LIFF_ID:            'YOUR_LIFF_ID',
+  SHEET_ID:           _props.getProperty('SHEET_ID')           || '',
+  ROOT_FOLDER_ID:     _props.getProperty('ROOT_FOLDER_ID')     || '',
+  LINE_CHANNEL_TOKEN: _props.getProperty('LINE_CHANNEL_TOKEN') || '',
+  LIFF_ID:            _props.getProperty('LIFF_ID')            || '',
 };
 
-var HUB_SHEET_ID  = '1BhmJonAz9c37eJ_bFaOVTcYE91lNgVNLbgIYHUUtDkQ';
+var HUB_SHEET_ID  = _props.getProperty('HUB_SHEET_ID') || '';
 var LINE_API_BASE = 'https://api.line.me/v2/bot/message';
 
 // =============================================================
