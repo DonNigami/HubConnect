@@ -305,3 +305,27 @@ function _getOrCreateFolder(parentFolder, name) {
   var it = parentFolder.getFoldersByName(name);
   return it.hasNext() ? it.next() : parentFolder.createFolder(name);
 }
+
+// =============================================================
+//  Utility — รันครั้งเดียวใน Apps Script editor
+//  เพื่อ fix รูปเก่าทั้งหมดให้ดูได้จากหน้า Admin
+// =============================================================
+function fixExistingFilesPermission() {
+  var root = DriveApp.getFolderById(CONFIG.ROOT_FOLDER_ID);
+  var count = _makeFilesPublicRecursive(root);
+  Logger.log('Done: ' + count + ' files updated');
+}
+
+function _makeFilesPublicRecursive(folder) {
+  var count = 0;
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    files.next().setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    count++;
+  }
+  var subs = folder.getFolders();
+  while (subs.hasNext()) {
+    count += _makeFilesPublicRecursive(subs.next());
+  }
+  return count;
+}
