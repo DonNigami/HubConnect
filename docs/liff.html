@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>บันทึกรูปสินค้า</title>
+  <script src="https://static.line-scdn.net/liff/edge/versions/2.22.3/sdk.js"></script>
+  <style>
+    :root {
+      --green:       #06C755;
+      --green-dark:  #05a847;
+      --red:         #ff4040;
+      --bg:          #f0f2f5;
+      --card:        #ffffff;
+      --text:        #222222;
+      --sub:         #888888;
+      --border:      #e0e0e0;
+      --r:           16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text);
+    }
+
+    #loadingScreen {
+      position: fixed; inset: 0; background: white;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 14px; z-index: 999;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e0e0e0;
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .header {
+      background: linear-gradient(135deg, #06C755 0%, #04a843 100%);
+      color: white; padding: 28px 20px 22px; text-align: center;
+    }
+    .header-icon { font-size: 32px; margin-bottom: 6px; }
+    .header h1  { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .header p   { font-size: 13px; opacity: 0.85; }
+
+    .container { max-width: 480px; margin: 0 auto; padding: 16px 16px 60px; }
+
+    .card {
+      background: var(--card); border-radius: var(--r);
+      padding: 20px; margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .card-title {
+      font-size: 11px; font-weight: 700;
+      color: var(--sub); text-transform: uppercase;
+      letter-spacing: 0.8px; margin-bottom: 14px;
+    }
+
+    .field + .field { margin-top: 14px; }
+    label.field-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    label.field-label .req { color: var(--red); margin-left: 2px; }
+
+    input[type="text"] {
+      width: 100%; padding: 12px 14px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 15px; outline: none;
+      transition: border 0.2s; font-family: inherit; color: var(--text); background: white;
+    }
+    input[type="text"]:focus { border-color: var(--green); }
+
+    .date-trigger {
+      width: 100%; padding: 12px 14px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 15px; font-family: inherit; color: var(--text);
+      background: white; cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: border 0.2s; user-select: none;
+    }
+    .date-trigger.filled  { border-color: var(--green); }
+    .date-trigger.disabled { opacity: 0.45; pointer-events: none; }
+    .date-trigger-icon { font-size: 18px; }
+
+    .search-wrap { position: relative; }
+    .search-wrap input[type="text"] { padding-right: 36px; }
+    .search-clear {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 18px; color: var(--sub); cursor: pointer; display: none; line-height: 1;
+    }
+    .search-list {
+      display: none; position: absolute; top: 100%; left: 0; right: 0;
+      background: white; border: 1.5px solid var(--green); border-radius: 10px;
+      margin-top: 4px; max-height: 200px; overflow-y: auto;
+      z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+    .search-list.open { display: block; }
+    .search-item {
+      padding: 12px 14px; cursor: pointer; font-size: 14px;
+      border-bottom: 1px solid #f0f0f0; transition: background 0.15s;
+    }
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: #f0fff5; color: var(--green); font-weight: 600; }
+    .search-empty { padding: 14px; text-align: center; color: var(--sub); font-size: 13px; }
+
+    .field-hint { font-size: 12px; color: var(--sub); margin-top: 7px; line-height: 1.5; }
+    .field-hint.warn { color: #b97a00; }
+
+    .type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+    .type-toggle input[type="radio"] { display: none; }
+    .type-toggle label {
+      display: flex; align-items: center; justify-content: center;
+      gap: 6px; padding: 13px 8px;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      transition: all 0.2s; color: var(--sub); background: white;
+    }
+    .type-toggle input:checked + label {
+      border-color: var(--green); background: #f0fff5; color: var(--green);
+    }
+
+    .photo-zone {
+      border: 2px dashed var(--border); border-radius: 12px;
+      padding: 28px 16px; text-align: center; cursor: pointer;
+      transition: all 0.2s; position: relative; overflow: hidden;
+    }
+    .photo-zone:hover { border-color: var(--green); background: #f8fff9; }
+    .photo-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 1;
+    }
+    .photo-zone-icon  { font-size: 40px; margin-bottom: 8px; }
+    .photo-zone-text  { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .photo-zone-sub   { font-size: 12px; color: var(--sub); }
+
+    .photo-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 8px; margin-top: 12px;
+    }
+    .photo-thumb {
+      position: relative; aspect-ratio: 1;
+      border-radius: 10px; overflow: hidden; background: #eee;
+    }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-thumb .remove-btn {
+      position: absolute; top: 4px; right: 4px;
+      background: rgba(0,0,0,0.55); color: white;
+      border: none; border-radius: 50%; width: 22px; height: 22px;
+      font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .photo-count-badge {
+      background: var(--green); color: white; border-radius: 99px;
+      padding: 3px 10px; font-size: 12px; font-weight: 700;
+      display: inline-block; margin-top: 10px;
+    }
+
+    .progress-wrap { display: none; }
+    .progress-wrap.show { display: block; }
+    .progress-bar  { height: 8px; background: #e8e8e8; border-radius: 99px; overflow: hidden; }
+    .progress-fill {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--green), #04d668);
+      border-radius: 99px; transition: width 0.3s ease;
+    }
+    .progress-label { font-size: 13px; color: var(--sub); margin-top: 8px; text-align: center; }
+
+    .result { display: none; border-radius: var(--r); padding: 24px 20px; text-align: center; }
+    .result.show    { display: block; }
+    .result.success { background: #f0fff5; border: 1.5px solid #06c755; }
+    .result.error   { background: #fff5f5; border: 1.5px solid #ff4040; }
+    .result-icon  { font-size: 44px; margin-bottom: 10px; }
+    .result-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .result-sub   { font-size: 14px; color: var(--sub); line-height: 1.7; }
+    .result-link  {
+      display: inline-block; margin-top: 12px; padding: 10px 20px;
+      background: var(--green); color: white; border-radius: 10px;
+      text-decoration: none; font-size: 14px; font-weight: 700;
+    }
+
+    .btn {
+      width: 100%; padding: 16px; background: var(--green); color: white;
+      border: none; border-radius: 12px; font-size: 16px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn:hover:not(:disabled) {
+      background: var(--green-dark); transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(6,199,85,0.35);
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+  </style>
+</head>
+<body>
+
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <p style="color:#aaa;font-size:13px">กำลังโหลด...</p>
+</div>
+
+<div class="header">
+  <div class="header-icon">🚚</div>
+  <h1>บันทึกรูปสินค้า</h1>
+  <p>ขึ้น/ลงสินค้า — ระบุ Wave, สาขา, วันที่</p>
+</div>
+
+<div class="container">
+
+  <!-- Wave -->
+  <div class="card">
+    <div class="card-title">📋 เลข Wave</div>
+    <div class="field">
+      <label class="field-label" for="waveInput">เลข Wave <span class="req">*</span></label>
+      <div class="search-wrap">
+        <input type="text" id="waveInput" placeholder="กำลังโหลดข้อมูล..."
+          autocomplete="off" autocorrect="off" spellcheck="false" readonly>
+        <span class="search-clear" id="waveClear" onclick="clearWave()">✕</span>
+        <div class="search-list" id="waveList"></div>
+      </div>
+      <div class="field-hint warn">⚠️ ข้อมูลมีเพียง 7 วันย้อนหลัง — พิมพ์บางส่วนแล้วเลือกจากรายการ</div>
+    </div>
+  </div>
+
+  <!-- Branch -->
+  <div class="card">
+    <div class="card-title">🏬 สาขา</div>
+    <div class="field">
+      <label class="field-label" for="branchInput">ชื่อสาขา <span class="req">*</span></label>
+      <div class="search-wrap">
+        <input type="text" id="branchInput" placeholder="กำลังโหลดข้อมูล..."
+          autocomplete="off" autocorrect="off" spellcheck="false" readonly>
+        <span class="search-clear" id="branchClear" onclick="clearBranch()">✕</span>
+        <div class="search-list" id="branchList"></div>
+      </div>
+      <div class="field-hint warn">⚠️ ข้อมูลมีเพียง 7 วันย้อนหลัง — พิมพ์บางส่วนแล้วเลือกจากรายการ</div>
+    </div>
+  </div>
+
+  <!-- Date & Type -->
+  <div class="card">
+    <div class="card-title">📅 วันที่และประเภท</div>
+    <div class="field">
+      <label class="field-label">วันที่ <span class="req">*</span></label>
+      <div class="date-trigger" id="dateTrigger" onclick="openDatePicker()">
+        <span id="dateDisplay">เลือกวันที่</span>
+        <span class="date-trigger-icon">📅</span>
+      </div>
+      <input type="date" id="dateInput"
+        style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;"
+        onchange="onDateChange(this.value)">
+    </div>
+    <div class="field">
+      <label class="field-label">ประเภทการดำเนินการ <span class="req">*</span></label>
+      <div class="type-toggle">
+        <input type="radio" id="typeUp" name="type" value="ขึ้นสินค้า" checked>
+        <label for="typeUp">⬆️ ขึ้นสินค้า</label>
+        <input type="radio" id="typeDown" name="type" value="ลงสินค้า">
+        <label for="typeDown">⬇️ ลงสินค้า</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photos -->
+  <div class="card">
+    <div class="card-title">📷 รูปภาพ</div>
+    <div class="photo-zone" id="photoZone">
+      <input type="file" id="photoInput" accept="image/*" multiple>
+      <div class="photo-zone-icon">🖼️</div>
+      <div class="photo-zone-text">แตะเพื่อเลือกรูปภาพ</div>
+      <div class="photo-zone-sub">เลือกได้หลายรูปพร้อมกัน • JPG, PNG, HEIC</div>
+    </div>
+    <div class="photo-grid" id="photoGrid"></div>
+    <div id="photoCountBadge" style="text-align:center;display:none">
+      <span class="photo-count-badge" id="photoCountText"></span>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap card" id="progressWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-label" id="progressLabel">กำลังอัปโหลด...</div>
+  </div>
+
+  <!-- Result -->
+  <div class="result" id="resultBox">
+    <div class="result-icon"  id="resultIcon"></div>
+    <div class="result-title" id="resultTitle"></div>
+    <div class="result-sub"   id="resultSub"></div>
+    <a  class="result-link"   id="resultLink" href="#" target="_blank" style="display:none">
+      📂 ดูรูปใน Drive
+    </a>
+  </div>
+
+  <!-- Submit -->
+  <button class="btn" id="submitBtn" onclick="startUpload()" disabled>
+    <span>📤</span> บันทึกรูปสินค้า
+  </button>
+
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwqD3kWhNm42XVBONxFK7O2SCiGiAoPI5wWMiV3su9_6XnBEqQkP3R40WLvGsLY1eAf/exec';
+var LIFF_ID = 'YOUR_LIFF_ID';  // ← ใส่ LIFF ID จริงหลังสร้าง LIFF app
+
+// ── State ────────────────────────────────────────────────────
+var userId         = null;
+var displayName    = '';
+var selectedWave   = '';
+var selectedBranch = '';
+var allWaves       = [];
+var allBranches    = [];
+var photos         = [];
+
+// ── Init LIFF ────────────────────────────────────────────────
+async function init() {
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+
+    var ctx = liff.getContext();
+    userId = ctx && ctx.userId ? ctx.userId : null;
+    if (!userId) {
+      try { userId = liff.getDecodedIDToken().sub; } catch(_) {}
+    }
+    if (!userId) {
+      var profile = await liff.getProfile();
+      userId      = profile.userId;
+      displayName = profile.displayName;
+    } else {
+      liff.getProfile().then(function(p){ displayName = p.displayName; }).catch(function(){});
+    }
+  } catch(e) {
+    userId      = 'dev_' + Date.now();
+    displayName = 'Dev User';
+    console.warn('LIFF init fallback:', e.message);
+  } finally {
+    document.getElementById('loadingScreen').style.display = 'none';
+  }
+
+  var today = new Date();
+  var yyyy  = today.getFullYear();
+  var mm    = String(today.getMonth()+1).padStart(2,'0');
+  var dd    = String(today.getDate()).padStart(2,'0');
+  document.getElementById('dateInput').value = yyyy + '-' + mm + '-' + dd;
+  onDateChange(yyyy + '-' + mm + '-' + dd);
+
+  loadHubData();
+}
+
+// ── Load Wave + Branch via fetch GET ─────────────────────────
+function loadHubData() {
+  var url = new URL(GAS_URL);
+  url.searchParams.set('action', 'hubdata');
+  fetch(url.toString())
+    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.error || 'โหลดข้อมูลไม่สำเร็จ');
+      allWaves    = r.data.waves    || [];
+      allBranches = r.data.branches || [];
+      var wInp = document.getElementById('waveInput');
+      wInp.removeAttribute('readonly');
+      wInp.placeholder = 'พิมพ์เพื่อค้นหาเลข Wave...';
+      var bInp = document.getElementById('branchInput');
+      bInp.removeAttribute('readonly');
+      bInp.placeholder = 'พิมพ์เพื่อค้นหาสาขา...';
+    })
+    .catch(function(err) {
+      console.error('loadHubData error:', err);
+      document.getElementById('waveInput').placeholder   = 'โหลดข้อมูลไม่สำเร็จ';
+      document.getElementById('branchInput').placeholder = 'โหลดข้อมูลไม่สำเร็จ';
+    });
+}
+
+// ── fetch POST helper (Content-Type: text/plain → ไม่มี CORS preflight) ──
+function gasPost(action, data) {
+  return fetch(GAS_URL, {
+    method:  'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body:    JSON.stringify({ action: action, data: data })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    if (!r.ok) throw new Error(r.error || 'Server error');
+    return r.data;
+  });
+}
+
+// ── Searchable dropdown ──────────────────────────────────────
+function initSearchField(cfg) {
+  var inp = document.getElementById(cfg.inputId);
+  inp.addEventListener('input', function() {
+    var q = this.value.trim().toLowerCase();
+    cfg.setSelected('');
+    document.getElementById(cfg.clearId).style.display = 'none';
+    updateSubmit();
+    if (!q) { closeList(cfg.listId); return; }
+    renderList(cfg.listId, cfg.getAll().filter(function(v) {
+      return v.toLowerCase().indexOf(q) !== -1;
+    }), cfg.inputId, cfg.clearId, cfg.setSelected, cfg.emptyMsg);
+  });
+  inp.addEventListener('focus', function() {
+    if (!this.value && cfg.getAll().length) {
+      renderList(cfg.listId, cfg.getAll(), cfg.inputId, cfg.clearId, cfg.setSelected, cfg.emptyMsg);
+    }
+  });
+}
+
+function renderList(listId, items, inputId, clearId, setSelected, emptyMsg) {
+  var list = document.getElementById(listId);
+  list.innerHTML = '';
+  if (!items.length) {
+    list.innerHTML = '<div class="search-empty">' + emptyMsg + '</div>';
+    list.classList.add('open'); return;
+  }
+  items.forEach(function(val) {
+    var div = document.createElement('div');
+    div.className = 'search-item';
+    div.textContent = val;
+    div.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      document.getElementById(inputId).value = val;
+      document.getElementById(clearId).style.display = 'block';
+      setSelected(val);
+      closeList(listId);
+      updateSubmit();
+    });
+    list.appendChild(div);
+  });
+  list.classList.add('open');
+}
+
+function closeList(listId) { document.getElementById(listId).classList.remove('open'); }
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-wrap')) {
+    closeList('waveList'); closeList('branchList');
+  }
+});
+
+initSearchField({
+  inputId: 'waveInput', listId: 'waveList', clearId: 'waveClear',
+  getAll: function() { return allWaves; },
+  setSelected: function(v) { selectedWave = v; },
+  emptyMsg: 'ไม่พบเลข Wave ในระบบ'
+});
+initSearchField({
+  inputId: 'branchInput', listId: 'branchList', clearId: 'branchClear',
+  getAll: function() { return allBranches; },
+  setSelected: function(v) { selectedBranch = v; },
+  emptyMsg: 'ไม่พบชื่อสาขาในระบบ'
+});
+
+function clearWave() {
+  selectedWave = '';
+  document.getElementById('waveInput').value = '';
+  document.getElementById('waveClear').style.display = 'none';
+  updateSubmit();
+}
+function clearBranch() {
+  selectedBranch = '';
+  document.getElementById('branchInput').value = '';
+  document.getElementById('branchClear').style.display = 'none';
+  updateSubmit();
+}
+
+// ── Photo selection ──────────────────────────────────────────
+document.getElementById('photoInput').addEventListener('change', function(e) {
+  Array.from(e.target.files).forEach(function(f) { photos.push(f); });
+  this.value = '';
+  renderThumbs(); updateSubmit();
+});
+
+function renderThumbs() {
+  var grid  = document.getElementById('photoGrid');
+  var badge = document.getElementById('photoCountBadge');
+  grid.innerHTML = '';
+  photos.forEach(function(file, idx) {
+    var thumb = document.createElement('div');
+    thumb.className = 'photo-thumb';
+    var img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    thumb.appendChild(img);
+    var btn = document.createElement('button');
+    btn.className = 'remove-btn'; btn.textContent = '✕';
+    btn.addEventListener('click', function(){ removePhoto(idx); });
+    thumb.appendChild(btn);
+    grid.appendChild(thumb);
+  });
+  if (photos.length) {
+    badge.style.display = 'block';
+    document.getElementById('photoCountText').textContent = photos.length + ' รูปที่เลือก';
+  } else { badge.style.display = 'none'; }
+}
+
+function removePhoto(idx) { photos.splice(idx, 1); renderThumbs(); updateSubmit(); }
+
+// ── Validation ───────────────────────────────────────────────
+function updateSubmit() {
+  var ok = selectedWave !== '' && selectedBranch !== '' &&
+           document.getElementById('dateInput').value !== '' && photos.length > 0;
+  document.getElementById('submitBtn').disabled = !ok;
+}
+
+function openDatePicker() {
+  var inp = document.getElementById('dateInput');
+  try { inp.showPicker(); } catch(e) { inp.focus(); }
+}
+function onDateChange(val) {
+  if (!val) return;
+  var dp = val.split('-');
+  document.getElementById('dateDisplay').textContent = dp[2]+'/'+dp[1]+'/'+dp[0];
+  document.getElementById('dateTrigger').classList.add('filled');
+  updateSubmit();
+}
+
+// ── Upload ───────────────────────────────────────────────────
+async function startUpload() {
+  var wave   = selectedWave;
+  var branch = selectedBranch;
+  var date   = document.getElementById('dateInput').value;
+  var type   = document.querySelector('input[name="type"]:checked').value;
+
+  if (!wave || !branch || !date || !photos.length) return;
+
+  setUIBusy(true);
+  showProgress(0, 'กำลังสร้างโฟลเดอร์...');
+
+  try {
+    // Step 1: สร้าง Drive folder
+    var session = await gasPost('createSession', {
+      wave: wave, branch: branch, date: date, type: type,
+      userId: userId || '', displayName: displayName || '', photoCount: photos.length
+    });
+
+    // Step 2: อัปโหลดรูปทีละใบ
+    for (var i = 0; i < photos.length; i++) {
+      showProgress(
+        Math.round(((i) / photos.length) * 80) + 10,
+        'กำลังอัปโหลดรูปที่ ' + (i+1) + '/' + photos.length + '...'
+      );
+
+      var compressed = await compressAndStamp(photos[i], { wave: wave, branch: branch, date: date, type: type });
+      var base64     = await toBase64(compressed);
+      var ext        = photos[i].name.split('.').pop() || 'jpg';
+      var now        = new Date();
+      var datePart   = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
+      var timePart   = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0');
+      var branchSafe = branch.replace(/\s+/g, '-');
+      var seq        = String(i+1).padStart(3,'0');
+      var filename   = branchSafe + '_' + datePart + '_' + timePart + '_' + type + '_' + seq + '.' + ext;
+
+      await gasPost('uploadPhoto', {
+        folderId: session.folderId, filename: filename,
+        base64: base64, mimeType: 'image/jpeg', index: i
+      });
+    }
+
+    // Step 3: finalize
+    showProgress(95, 'กำลังบันทึกข้อมูล...');
+    await gasPost('finalize', {
+      wave: wave, branch: branch, date: date, type: type,
+      userId: userId || '', displayName: displayName || '',
+      photoCount: photos.length, folderId: session.folderId, folderUrl: session.folderUrl
+    });
+
+    showProgress(100, 'เสร็จสิ้น!');
+    setTimeout(function() {
+      showSuccess(wave, branch, date, photos.length, session.folderUrl);
+    }, 500);
+
+  } catch(err) {
+    document.getElementById('progressWrap').classList.remove('show');
+    showError(err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+    setUIBusy(false);
+  }
+}
+
+// ── Image compress + stamp ───────────────────────────────────
+function compressAndStamp(file, info) {
+  return new Promise(function(resolve) {
+    var MAX = 1600;
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var img = new Image();
+      img.onload = function() {
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        _drawStamp(ctx, w, info);
+        canvas.toBlob(resolve, 'image/jpeg', 0.82);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function _drawStamp(ctx, w, info) {
+  var now = new Date();
+  var uploadStr = String(now.getDate()).padStart(2,'0') + '/' +
+                  String(now.getMonth()+1).padStart(2,'0') + '/' +
+                  now.getFullYear() + ' ' +
+                  String(now.getHours()).padStart(2,'0') + ':' +
+                  String(now.getMinutes()).padStart(2,'0');
+
+  var dp = info.date.split('-');
+  var displayDate = dp[2] + '/' + dp[1] + '/' + dp[0];
+
+  var lines = [
+    'Wave: '     + info.wave,
+    'สาขา: '    + info.branch,
+    'วันที่: '   + displayDate,
+    'ประเภท: '  + info.type,
+    'อัพโหลด: ' + uploadStr
+  ];
+
+  var fontSize = Math.max(14, Math.min(28, Math.round(w / 45)));
+  var lineH    = Math.round(fontSize * 1.6);
+  var padding  = Math.round(fontSize * 0.75);
+  var margin   = 12;
+
+  ctx.font = 'bold ' + fontSize + 'px "Sarabun", Arial, sans-serif';
+  var maxTW = 0;
+  lines.forEach(function(l) { var tw = ctx.measureText(l).width; if (tw > maxTW) maxTW = tw; });
+
+  var boxW = Math.round(maxTW + padding * 2);
+  var boxH = lines.length * lineH + padding;
+  var boxX = w - boxW - margin;
+  var boxY = margin;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.fillStyle = '#ffffff';
+  lines.forEach(function(line, i) {
+    ctx.fillText(line, boxX + padding, boxY + padding + fontSize + i * lineH);
+  });
+}
+
+function toBase64(blob) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload  = function(e) { resolve(e.target.result.split(',')[1]); };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// ── UI helpers ───────────────────────────────────────────────
+function setUIBusy(busy) {
+  document.getElementById('submitBtn').disabled   = busy;
+  document.getElementById('waveInput').disabled   = busy;
+  document.getElementById('branchInput').disabled = busy;
+  var trigger = document.getElementById('dateTrigger');
+  busy ? trigger.classList.add('disabled') : trigger.classList.remove('disabled');
+  document.getElementById('photoInput').disabled  = busy;
+}
+
+function showProgress(pct, label) {
+  document.getElementById('progressWrap').classList.add('show');
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+}
+
+function showSuccess(wave, branch, date, count, folderUrl) {
+  document.getElementById('progressWrap').classList.remove('show');
+  var box = document.getElementById('resultBox');
+  box.className = 'result show success';
+  document.getElementById('resultIcon').textContent  = '✅';
+  document.getElementById('resultTitle').textContent = 'อัปโหลดสำเร็จ!';
+  document.getElementById('resultSub').textContent   = wave + ' • ' + branch + '\n' + date + ' • ' + count + ' รูป';
+  var link = document.getElementById('resultLink');
+  link.href = folderUrl; link.style.display = 'inline-block';
+  if (liff.isInClient()) { setTimeout(function(){ liff.closeWindow(); }, 3000); }
+}
+
+function showError(msg) {
+  var box = document.getElementById('resultBox');
+  box.className = 'result show error';
+  document.getElementById('resultIcon').textContent  = '❌';
+  document.getElementById('resultTitle').textContent = 'เกิดข้อผิดพลาด';
+  document.getElementById('resultSub').textContent   = msg;
+  document.getElementById('resultLink').style.display = 'none';
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

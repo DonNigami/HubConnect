@@ -19,7 +19,7 @@ var LINE_API_BASE = 'https://api.line.me/v2/bot/message';
 function doGet(e) {
   var p = e.parameter || {};
 
-  // ── REST API (สำหรับ Vercel host หรือ fetch จากภายนอก) ──
+  // ── REST API (สำหรับ GitHub Pages หรือ fetch จากภายนอก) ──
   if (p.action) {
     var result;
     try {
@@ -33,6 +33,8 @@ function doGet(e) {
           dateTo:   p.dateTo   || '',
           type:     p.type     || 'all'
         })};
+      } else if (p.action === 'hubdata') {
+        result = { ok: true, data: getHubData() };
       } else {
         result = { ok: false, error: 'unknown action' };
       }
@@ -58,14 +60,49 @@ function doGet(e) {
 }
 
 // =============================================================
+//  doPost — LINE Webhook + LIFF REST API (from GitHub Pages)
+// =============================================================
+function doPost(e) {
+  try {
+    var body = JSON.parse(e.postData.contents);
+
+    // ── LIFF REST API calls (body มี .action field) ──
+    if (body.action) {
+      var result;
+      try {
+        if (body.action === 'createSession') {
+          result = { ok: true, data: createUploadSession(body.data) };
+        } else if (body.action === 'uploadPhoto') {
+          result = { ok: true, data: uploadPhoto(body.data) };
+        } else if (body.action === 'finalize') {
+          result = { ok: true, data: finalizeUpload(body.data) };
+        } else {
+          result = { ok: false, error: 'unknown action' };
+        }
+      } catch(err) {
+        result = { ok: false, error: err.message };
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // ── LINE Webhook (body มี .events array) ──
+    var events = body.events || [];
+    events.forEach(function(event) {
+      if (event.type === 'message' || event.type === 'follow') {
+        replyWithLiff(event.replyToken, 'https://liff.line.me/' + CONFIG.LIFF_ID);
+      }
+    });
+  } catch (err) {
+    Logger.log('doPost error: ' + err.message);
+  }
+  return ContentService.createTextOutput('OK');
+}
+
+// =============================================================
 //  Admin — search uploads from Upload_Log + Drive
 // =============================================================
-
-/**
- * ค้นหา session จาก Upload_Log sheet แล้วดึงไฟล์จาก Drive
- * @param {Object} params - { wave, branch, dateFrom, dateTo, type }
- * @returns {Array} sessions
- */
 function adminSearch(params) {
   var ss    = SpreadsheetApp.openById(CONFIG.SHEET_ID);
   var sheet = ss.getSheetByName('Upload_Log');
@@ -74,7 +111,7 @@ function adminSearch(params) {
   var data    = sheet.getDataRange().getValues();
   var results = [];
 
-  for (var i = data.length - 1; i >= 1; i--) {  // newest first
+  for (var i = data.length - 1; i >= 1; i--) {
     var row        = data[i];
     var timestamp  = row[0];
     var wave       = String(row[1] || '');
@@ -83,14 +120,12 @@ function adminSearch(params) {
     var type       = String(row[4] || '');
     var folderUrl  = String(row[8] || '');
 
-    // กรอง
     if (params.wave   && wave.toLowerCase().indexOf(params.wave.toLowerCase())     === -1) continue;
     if (params.branch && branch.toLowerCase().indexOf(params.branch.toLowerCase()) === -1) continue;
     if (params.type   && params.type !== 'all' && type !== params.type) continue;
     if (params.dateFrom && date < params.dateFrom) continue;
     if (params.dateTo   && date > params.dateTo)   continue;
 
-    // ดึง folder ID จาก URL
     var match = folderUrl.match(/[-\w]{25,}/);
     if (!match) continue;
 
@@ -100,16 +135,10 @@ function adminSearch(params) {
       var it     = folder.getFiles();
       while (it.hasNext()) {
         var f = it.next();
-        files.push({
-          id:   f.getId(),
-          name: f.getName()
-        });
+        files.push({ id: f.getId(), name: f.getName() });
       }
-    } catch(e) {
-      files = [];  // folder ถูกลบหรือไม่มีสิทธิ์
-    }
+    } catch(e) { files = []; }
 
-    // แปลง date YYYY-MM-DD → DD/MM/YYYY
     var dp = date.split('-');
     var displayDate = dp.length === 3 ? dp[2]+'/'+dp[1]+'/'+dp[0] : date;
 
@@ -119,26 +148,16 @@ function adminSearch(params) {
     } catch(e) { ts = String(timestamp); }
 
     results.push({
-      wave:        wave,
-      branch:      branch,
-      date:        date,
-      displayDate: displayDate,
-      type:        type,
-      folderUrl:   folderUrl,
-      uploadedAt:  ts,
-      photoCount:  files.length,
-      files:       files
+      wave: wave, branch: branch, date: date, displayDate: displayDate,
+      type: type, folderUrl: folderUrl, uploadedAt: ts,
+      photoCount: files.length, files: files
     });
 
-    if (results.length >= 100) break;  // จำกัด 100 sessions
+    if (results.length >= 100) break;
   }
-
   return results;
 }
 
-/**
- * คืนรายชื่อสาขาที่เคย upload (จาก Upload_Log) สำหรับ dropdown ค้นหา
- */
 function adminGetBranches() {
   var ss    = SpreadsheetApp.openById(CONFIG.SHEET_ID);
   var sheet = ss.getSheetByName('Upload_Log');
@@ -153,31 +172,8 @@ function adminGetBranches() {
 }
 
 // =============================================================
-//  doPost — LINE Webhook receiver
+//  Public functions — called from LIFF (google.script.run OR fetch POST)
 // =============================================================
-function doPost(e) {
-  try {
-    var body   = JSON.parse(e.postData.contents);
-    var events = body.events || [];
-    events.forEach(function(event) {
-      if (event.type === 'message' || event.type === 'follow') {
-        replyWithLiff(event.replyToken, 'https://liff.line.me/' + CONFIG.LIFF_ID);
-      }
-    });
-  } catch (err) {
-    Logger.log('doPost error: ' + err.message);
-  }
-  return ContentService.createTextOutput('OK');
-}
-
-// =============================================================
-//  Public functions — called from LIFF via google.script.run
-// =============================================================
-
-/**
- * คืน waves และ branches จาก HUB sheet
- * @returns {{ waves: string[], branches: string[] }}
- */
 function getHubData() {
   var ss    = SpreadsheetApp.openById(HUB_SHEET_ID);
   var sheet = ss.getSheetByName('HUB');
@@ -200,42 +196,24 @@ function getHubData() {
   };
 }
 
-/**
- * สร้าง Drive folder path: Root / branch / date / wave
- * @param {Object} metadata - { wave, branch, date, type, userId, displayName, photoCount }
- * @returns {{ folderId: string, folderUrl: string }}
- */
 function createUploadSession(metadata) {
-  var root        = DriveApp.getFolderById(CONFIG.ROOT_FOLDER_ID);
-  var branchFold  = _getOrCreateFolder(root,       metadata.branch);
-  var dateFold    = _getOrCreateFolder(branchFold, metadata.date);
-  var waveFold    = _getOrCreateFolder(dateFold,   metadata.wave);
+  var root       = DriveApp.getFolderById(CONFIG.ROOT_FOLDER_ID);
+  var branchFold = _getOrCreateFolder(root,       metadata.branch);
+  var dateFold   = _getOrCreateFolder(branchFold, metadata.date);
+  var waveFold   = _getOrCreateFolder(dateFold,   metadata.wave);
 
-  return {
-    folderId:  waveFold.getId(),
-    folderUrl: waveFold.getUrl()
-  };
+  return { folderId: waveFold.getId(), folderUrl: waveFold.getUrl() };
 }
 
-/**
- * อัปโหลดรูปทีละใบเข้า Drive folder
- * @param {Object} params - { folderId, filename, base64, mimeType, index }
- */
 function uploadPhoto(params) {
   var folder  = DriveApp.getFolderById(params.folderId);
   var decoded = Utilities.base64Decode(params.base64);
   var blob    = Utilities.newBlob(decoded, params.mimeType || 'image/jpeg', params.filename);
   var file    = folder.createFile(blob);
-
   return { fileId: file.getId(), fileUrl: file.getUrl(), index: params.index };
 }
 
-/**
- * บันทึก log ใน Sheets + ส่ง LINE push notification
- * @param {Object} result - { wave, branch, date, type, userId, displayName, photoCount, folderUrl }
- */
 function finalizeUpload(result) {
-  // บันทึก Upload_Log
   var ss    = SpreadsheetApp.openById(CONFIG.SHEET_ID);
   var sheet = ss.getSheetByName('Upload_Log');
   if (!sheet) throw new Error('ไม่พบ Sheet ชื่อ "Upload_Log"');
@@ -253,7 +231,6 @@ function finalizeUpload(result) {
     'success'
   ]);
 
-  // LINE push notification (ข้ามถ้าเป็น dev user)
   if (result.userId && result.userId.indexOf('dev_') !== 0) {
     var lines = [
       '✅ อัปโหลดรูปสินค้าเรียบร้อยแล้ว! ' + result.photoCount + ' รูป',
@@ -272,9 +249,8 @@ function finalizeUpload(result) {
 }
 
 // =============================================================
-//  LINE helpers — reply + Flex Message
+//  LINE helpers
 // =============================================================
-
 function replyWithLiff(replyToken, liffUrl) {
   _linePost(LINE_API_BASE + '/reply', {
     replyToken: replyToken,
@@ -284,49 +260,24 @@ function replyWithLiff(replyToken, liffUrl) {
 
 function _buildFlexMessage(liffUrl) {
   return {
-    type:     'flex',
-    altText:  'บันทึกรูปขึ้น/ลงสินค้า',
+    type: 'flex', altText: 'บันทึกรูปขึ้น/ลงสินค้า',
     contents: {
-      type: 'bubble',
-      size: 'mega',
+      type: 'bubble', size: 'mega',
       header: {
-        type:            'box',
-        layout:          'vertical',
-        backgroundColor: '#06C755',
-        paddingAll:      '20px',
-        contents: [{
-          type:   'text',
-          text:   '🚚 บันทึกรูปสินค้า',
-          color:  '#FFFFFF',
-          size:   'xl',
-          weight: 'bold'
-        }]
+        type: 'box', layout: 'vertical',
+        backgroundColor: '#06C755', paddingAll: '20px',
+        contents: [{ type: 'text', text: '🚚 บันทึกรูปสินค้า',
+          color: '#FFFFFF', size: 'xl', weight: 'bold' }]
       },
       body: {
-        type:    'box',
-        layout:  'vertical',
-        spacing: 'md',
-        contents: [{
-          type:  'text',
-          text:  'ถ่ายรูปตอนขึ้นหรือลงสินค้า พร้อมระบุเลข Wave, สาขา และวันที่',
-          wrap:  true,
-          color: '#555555',
-          size:  'sm'
-        }]
+        type: 'box', layout: 'vertical', spacing: 'md',
+        contents: [{ type: 'text', wrap: true, color: '#555555', size: 'sm',
+          text: 'ถ่ายรูปตอนขึ้นหรือลงสินค้า พร้อมระบุเลข Wave, สาขา และวันที่' }]
       },
       footer: {
-        type:   'box',
-        layout: 'vertical',
-        contents: [{
-          type:   'button',
-          style:  'primary',
-          color:  '#06C755',
-          action: {
-            type:  'uri',
-            label: '📷 เปิดฟอร์มอัปโหลด',
-            uri:   liffUrl
-          }
-        }]
+        type: 'box', layout: 'vertical',
+        contents: [{ type: 'button', style: 'primary', color: '#06C755',
+          action: { type: 'uri', label: '📷 เปิดฟอร์มอัปโหลด', uri: liffUrl } }]
       }
     }
   };
@@ -334,11 +285,9 @@ function _buildFlexMessage(liffUrl) {
 
 function _linePost(url, payload) {
   var resp = UrlFetchApp.fetch(url, {
-    method:          'post',
-    contentType:     'application/json',
-    headers:         { 'Authorization': 'Bearer ' + CONFIG.LINE_CHANNEL_TOKEN },
-    payload:         JSON.stringify(payload),
-    muteHttpExceptions: true
+    method: 'post', contentType: 'application/json',
+    headers: { 'Authorization': 'Bearer ' + CONFIG.LINE_CHANNEL_TOKEN },
+    payload: JSON.stringify(payload), muteHttpExceptions: true
   });
   if (resp.getResponseCode() !== 200) {
     Logger.log('LINE API error: ' + resp.getContentText());
@@ -348,7 +297,6 @@ function _linePost(url, payload) {
 // =============================================================
 //  Drive helper
 // =============================================================
-
 function _getOrCreateFolder(parentFolder, name) {
   var it = parentFolder.getFoldersByName(name);
   return it.hasNext() ? it.next() : parentFolder.createFolder(name);
