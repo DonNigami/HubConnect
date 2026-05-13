@@ -213,6 +213,7 @@ function uploadPhoto(params) {
   var decoded = Utilities.base64Decode(params.base64);
   var blob    = Utilities.newBlob(decoded, params.mimeType || 'image/jpeg', params.filename);
   var file    = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return { fileId: file.getId(), fileUrl: file.getUrl(), index: params.index };
 }
 
