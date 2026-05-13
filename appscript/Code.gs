@@ -116,9 +116,14 @@ function adminSearch(params) {
     var timestamp  = row[0];
     var wave       = String(row[1] || '');
     var branch     = String(row[2] || '');
-    var date       = String(row[3] || '');
     var type       = String(row[4] || '');
     var folderUrl  = String(row[8] || '');
+
+    // Google Sheets อาจแปลง "2026-05-13" เป็น Date object อัตโนมัติ
+    var dateRaw = row[3];
+    var date = dateRaw instanceof Date
+      ? Utilities.formatDate(dateRaw, 'Asia/Bangkok', 'yyyy-MM-dd')
+      : String(dateRaw || '').trim();
 
     if (params.wave   && wave.toLowerCase().indexOf(params.wave.toLowerCase())     === -1) continue;
     if (params.branch && branch.toLowerCase().indexOf(params.branch.toLowerCase()) === -1) continue;
