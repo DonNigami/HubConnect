@@ -54,8 +54,9 @@ timestamp | wave | branch_name | date | type | line_user_id | display_name | pho
 
 ### 2. Google Drive Folder
 
-ใช้ folder ที่มีอยู่แล้ว ID: `1Hj_1fxOxcMcdQKGRTktaKWSpPOofY-x4`  
-(หรือสร้างใหม่แล้วอัปเดต `ROOT_FOLDER_ID` ใน `Code.gs`)
+สร้าง folder ใน Google Drive แล้วจด **Folder ID** จาก URL:  
+`https://drive.google.com/drive/folders/`**`<FOLDER_ID>`**  
+จากนั้นใส่ใน Script Properties ที่ key `ROOT_FOLDER_ID`
 
 ---
 
@@ -86,16 +87,17 @@ clasp create --title "HubConnect" --type webapp
 
 ### 4. ใส่ค่า Config ใน `Code.gs`
 
-แก้ `CONFIG` object:
+ไม่ต้องแก้ `Code.gs` — ตั้งค่าผ่าน **Script Properties** แทน:
 
-```javascript
-var CONFIG = {
-  SHEET_ID:           'YOUR_GOOGLE_SHEET_ID',           // จากขั้นตอน 1
-  ROOT_FOLDER_ID:     '1Hj_1fxOxcMcdQKGRTktaKWSpPOofY-x4',
-  LINE_CHANNEL_TOKEN: 'YOUR_LINE_CHANNEL_ACCESS_TOKEN', // จากขั้นตอน 7
-  LIFF_ID:            'YOUR_LIFF_ID',                   // จากขั้นตอน 8
-};
-```
+ไป Apps Script editor → **Project Settings (⚙️) → Script Properties → Add script property**
+
+| Property | Value |
+|---|---|
+| `SHEET_ID` | Spreadsheet ID จากขั้นตอน 1 |
+| `ROOT_FOLDER_ID` | Folder ID จากขั้นตอน 2 |
+| `HUB_SHEET_ID` | Spreadsheet ID ของ HUB sheet |
+| `LINE_CHANNEL_TOKEN` | Channel Access Token จากขั้นตอน 9 |
+| `LIFF_ID` | LIFF ID จากขั้นตอน 10 |
 
 ---
 
