@@ -88,10 +88,17 @@ function doPost(e) {
     }
 
     // ── LINE Webhook (body มี .events array) ──
-    var events = body.events || [];
+    var events  = body.events || [];
+    var liffUrl = 'https://liff.line.me/' + CONFIG.LIFF_ID;
     events.forEach(function(event) {
-      if (event.type === 'message' || event.type === 'follow') {
-        replyWithLiff(event.replyToken, 'https://liff.line.me/' + CONFIG.LIFF_ID);
+      if (event.type === 'message') {
+        replyWithLiff(event.replyToken, liffUrl);
+      } else if (event.type === 'follow') {
+        // ใช้ push แทน reply เพราะ follow replyToken อาจหมดอายุเร็ว
+        _linePost(LINE_API_BASE + '/push', {
+          to:       event.source.userId,
+          messages: [_buildFlexMessage(liffUrl)]
+        });
       }
     });
   } catch (err) {
